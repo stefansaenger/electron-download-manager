@@ -131,17 +131,17 @@ const register = (opts = {}) => {
     });
 };
 
-const download = (options, callback) => {
+const download = (options, callback, callback2 ) => {
     let win = BrowserWindow.getFocusedWindow() || lastWindowCreated;
     options = Object.assign({}, { path: '' }, options);
 
     const request = net.request(options.url);
     
-    const filename = decodeURIComponent(path.basename(options.url));
+    let filename = decodeURIComponent(path.basename(options.url));
     const url = decodeURIComponent(options.url);
 
     const folder = options.downloadFolder || downloadFolder
-    const filePath = path.join(folder, options.path.toString(), filename.split(/[?#]/)[0])
+    let filePath = path.join(folder, options.path.toString(), filename.split(/[?#]/)[0])
 
     if (options.headers) {
         options.headers.forEach((h) => { request.setHeader(h.name, h.value) })
@@ -172,50 +172,77 @@ const download = (options, callback) => {
 
     request.on('response', function (response) {
         request.abort();
-
-        queue.push({
-            url: url,
-            filename: filename,
-            downloadFolder: options.downloadFolder,
-            path: options.path.toString(),
-            callback: callback,
-            onProgress: options.onProgress
-        });
-
-
         if (fs.existsSync(filePath)) {
-            const stats = fs.statSync(filePath);
-
-            const fileOffset = stats.size;
-
-            const serverFileSize = parseInt(response.headers['content-length']);
-
-            console.log(filename + ' exists, verifying file size: (' + fileOffset + ' / ' + serverFileSize + ' downloaded)');
-
-            // Check if size on disk is lower than server
-            if (fileOffset < serverFileSize) {
-                console.log('File needs re-downloaded as it was not completed');
-
-                options = {
-                    path: filePath,
-                    urlChain: [options.url],
-                    offset: parseInt(fileOffset),
-                    length: serverFileSize,
-                    lastModified: response.headers['last-modified']
-                };
-
-                win.webContents.session.createInterruptedDownload(options);
-
+            if (options.override) {
+                let fileName = filename.substring(0, filename.lastIndexOf("."));
+                let fileExtension = filename.substring(filename.lastIndexOf("."), filename.length);
+                let newFilename = fileName;
+                for (let i = 0; i < 1000; i++) {
+                    newFilename = fileName + " (" + i + ")" + fileExtension;
+                    if (!fs.existsSync(filePath.replace(filename, newFilename))) {
+                        break;
+                    }
+                }
+                queue.push({
+                    url: url,
+                    filename: newFilename,
+                    downloadFolder: options.downloadFolder,
+                    path: options.path.toString(),
+                    callback: callback,
+                    onProgress: options.onProgress
+                });
+                console.log(newFilename + ' does not exist, download it now');
+                if (typeof callback2 === "function") {
+                    callback2(newFilename, options);
+                }
+                win.webContents.downloadURL(options.url);
             } else {
+                queue.push({
+                    url: url,
+                    filename: filename,
+                    downloadFolder: options.downloadFolder,
+                    path: options.path.toString(),
+                    callback: callback,
+                    onProgress: options.onProgress
+                });
+                const stats = fs.statSync(filePath);
+                const fileOffset = stats.size;
+                const serverFileSize = parseInt(response.headers['content-length']);
+                console.log(filename + ' exists, verifying file size: (' + fileOffset + ' / ' + serverFileSize + ' downloaded)');
+                // Check if size on disk is lower than server
+                if (fileOffset < serverFileSize) {
+                    console.log('File needs re-downloaded as it was not completed');
 
-                console.log(filename + ' verified, no download needed');
+                    options = {
+                        path: filePath,
+                        urlChain: [options.url],
+                        offset: parseInt(fileOffset),
+                        length: serverFileSize,
+                        lastModified: response.headers['last-modified']
+                    };
 
-                let finishedDownloadCallback = callback || function () {};
+                    win.webContents.session.createInterruptedDownload(options);
 
-                finishedDownloadCallback(null, { url, filePath });
+                } else {
+
+                    console.log(filename + ' verified, no download needed');
+
+                    let finishedDownloadCallback = callback || function () {};
+
+                    finishedDownloadCallback(null, { url, filePath });
+                }
             }
+            
 
         } else {
+            queue.push({
+                url: url,
+                filename: filename,
+                downloadFolder: options.downloadFolder,
+                path: options.path.toString(),
+                callback: callback,
+                onProgress: options.onProgress
+            });
             console.log(filename + ' does not exist, download it now');
             win.webContents.downloadURL(options.url);
         }

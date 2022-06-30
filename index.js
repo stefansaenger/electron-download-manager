@@ -92,6 +92,7 @@ function _registerListener(win, opts = {}) {
 
             item.on('done', (e, state) => {
 
+                console.log("item done: ", state);
                 let finishedDownloadCallback = queueItem.callback || function () {};
 
                 if (!win.isDestroyed()) {
@@ -112,7 +113,7 @@ function _registerListener(win, opts = {}) {
                     // if (opts.unregisterWhenDone) {
                     //     webContents.session.removeListener('will-download', listener);
                     // }
-
+                    console.log("finishedDownloadCallback: ", filePath);
                     finishedDownloadCallback(null, { url: item.getURL(), filePath });
 
                 }
@@ -136,7 +137,7 @@ const download = (options, callback, callback2 ) => {
     options = Object.assign({}, { path: '' }, options);
 
     const request = net.request(options.url);
-    
+
     let filename = decodeURIComponent(path.basename(options.url));
     const url = decodeURIComponent(options.url);
 
@@ -232,7 +233,7 @@ const download = (options, callback, callback2 ) => {
                     finishedDownloadCallback(null, { url, filePath });
                 }
             }
-            
+
 
         } else {
             queue.push({
@@ -245,6 +246,9 @@ const download = (options, callback, callback2 ) => {
             });
             console.log(filename + ' does not exist, download it now');
             win.webContents.downloadURL(options.url);
+            if (typeof callback2 === "function") {
+                callback2(newFilename, options);
+            }            
         }
     });
     request.end();

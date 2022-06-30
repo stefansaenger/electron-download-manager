@@ -247,8 +247,8 @@ const download = (options, callback, callback2 ) => {
             console.log(filename + ' does not exist, download it now');
             win.webContents.downloadURL(options.url);
             if (typeof callback2 === "function") {
-                callback2(newFilename, options);
-            }            
+                callback2(filename, options);
+            }
         }
     });
     request.end();
